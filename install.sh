@@ -1,26 +1,43 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-echo "Installing dependencies"
-sudo apt update && sudo apt install git nodejs npm
+APP_NAME="dashcam-transporter"
+REPO="steve192/dashcam-transporter"
+ARCH="$(dpkg --print-architecture)"
+BASE_URL="https://github.com/${REPO}/releases/latest/download"
 
-echo "Cloning repo"
-git clone https://github.com/steve192/dashcam-transporter.git
+case "$ARCH" in
+  armhf|arm64|amd64) ;;
+  *)
+    echo "Unsupported architecture: $ARCH" >&2
+    exit 1
+    ;;
+ esac
 
-cd dashcam-transporter/backend
+asset="${APP_NAME}_${ARCH}.deb"
+url="${BASE_URL}/${asset}"
 
-echo "Installing and building"
+tmp="$(mktemp -t ${APP_NAME}.XXXXXX.deb)"
+apt_updated=0
+cleanup() {
+  rm -f "$tmp"
+}
+trap cleanup EXIT
 
-npm i && npm run build
+if ! command -v curl >/dev/null 2>&1; then
+  sudo apt-get update
+  apt_updated=1
+  sudo apt-get install -y curl
+fi
 
-cd dist
+echo "Downloading $url"
+curl -fsSL "$url" -o "$tmp"
 
-echo "Run setup script"
+echo "Installing $asset"
+if [ "$apt_updated" -eq 0 ]; then
+  sudo apt-get update
+fi
+sudo apt-get install -y "$tmp"
 
-sudo ./setup.sh
-
-echo "Configuring..."
-
-nano settings.ini
-
-echo "Rebooting"
-sudo reboot
+echo "Edit config: sudo nano /etc/dashcam-transporter/settings.ini"
+echo "Check status: sudo dashcam-transporter status"

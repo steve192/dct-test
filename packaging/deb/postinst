@@ -1,0 +1,46 @@
+#!/bin/sh
+set -e
+
+APP_USER="dashcam-transporter"
+APP_GROUP="dashcam-transporter"
+APP_DIR="/opt/dashcam-transporter"
+CONFIG_DIR="/etc/dashcam-transporter"
+LOG_DIR="/var/log/dashcam-transporter"
+STATE_DIR="/var/lib/dashcam-transporter"
+DOWNLOAD_DIR="/opt/videodownload"
+
+if ! getent group "$APP_GROUP" >/dev/null 2>&1; then
+  groupadd --system "$APP_GROUP"
+fi
+
+if ! id -u "$APP_USER" >/dev/null 2>&1; then
+  useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin --gid "$APP_GROUP" "$APP_USER"
+fi
+
+install -d -o "$APP_USER" -g "$APP_GROUP" "$LOG_DIR" "$STATE_DIR" "$DOWNLOAD_DIR"
+chown -R "$APP_USER":"$APP_GROUP" "$APP_DIR" "$DOWNLOAD_DIR"
+
+if [ -f "$CONFIG_DIR/settings.ini" ]; then
+  chown root:"$APP_GROUP" "$CONFIG_DIR/settings.ini"
+  chmod 640 "$CONFIG_DIR/settings.ini"
+fi
+
+if [ ! -f "$CONFIG_DIR/skip-networkmanager-setup" ]; then
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable NetworkManager >/dev/null 2>&1 || true
+    systemctl start NetworkManager >/dev/null 2>&1 || true
+
+    if systemctl is-enabled --quiet dhcpcd; then
+      echo "disabled" > "$STATE_DIR/dhcpcd-disabled"
+      systemctl disable --now dhcpcd >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl enable dashcam-transporter >/dev/null 2>&1 || true
+  systemctl try-restart dashcam-transporter >/dev/null 2>&1 || systemctl start dashcam-transporter >/dev/null 2>&1 || true
+fi
+
+exit 0

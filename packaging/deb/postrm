@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+
+APP_USER="dashcam-transporter"
+APP_GROUP="dashcam-transporter"
+CONFIG_DIR="/etc/dashcam-transporter"
+STATE_DIR="/var/lib/dashcam-transporter"
+LOG_DIR="/var/log/dashcam-transporter"
+
+if [ "$1" = "purge" ]; then
+  if [ -f "$STATE_DIR/dhcpcd-disabled" ]; then
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl enable dhcpcd >/dev/null 2>&1 || true
+      systemctl start dhcpcd >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if id -u "$APP_USER" >/dev/null 2>&1; then
+    userdel "$APP_USER" >/dev/null 2>&1 || true
+  fi
+
+  if getent group "$APP_GROUP" >/dev/null 2>&1; then
+    groupdel "$APP_GROUP" >/dev/null 2>&1 || true
+  fi
+
+  rm -rf "$STATE_DIR" "$LOG_DIR"
+  rm -f "$CONFIG_DIR/skip-networkmanager-setup"
+fi
+
+exit 0
